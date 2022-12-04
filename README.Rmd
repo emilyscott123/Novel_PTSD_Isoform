@@ -1,0 +1,159 @@
+---
+title: "README"
+author: "EmilyScott"
+date: "4/26/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Novel PTSD Isoform README
+
+All data is internal to the R markdown script, `NovelPTSDIsoformScript.Rmd`, and every line of code to recreate data is in the script.
+
+The following is a step by step description of the script and the date of lastest version.
+
+1. Load packages using `library()`.
+2. Get "Gene Networks Specific for Innate Immunity Define Post-traumatic Stress Disorder [RNA-Seq]" dataset from recount2 using `recount` package. Follow the recount quickstart workflow (
+http://www.bioconductor.org/packages/release/bioc/vignettes/recount/inst/doc/recount-quickstart.html#43_predicted_phenotype_information).
+  a. Import bigwig files by sample.
+  b. Import rse_gene data.
+3. Look at Phenotype Information
+  a. Use `head()` to take a look at the phenotype info from rse data 
+  b. Create a sample_info dataframe containing run, group(control/case), and time(pre/post) columns.
+  c. Split sample_info into four different sample_info dataframes by group and time
+4. Create DataTrackPlot Info: 4. Create a data track object of information of coverage by group to compare expression levels. 
+  a. Separate bw files by group using sample_info 
+  b. Set the file path for bw files to input into DataTrack object
+  c. Take a look at chromosome 11 and create a track of chr11.
+  d. Create 4 different DataTrack objects based on group using `DataTrack()`
+  e. ID track names
+  f. Combine DataTrack objects for the 4 groups onto one plot along with chr11 plot
+5. Define which regions are expressed in chr11 using `expressed_regions()` from `DERFinder` package.
+6. Compute Coverage Matrix: Compute a RangedSummarizedExperiment object for chromosome 11 using the expressed regions object.
+  a. Compute coverage matrix for SRP051848 on chr11 using `coverage_matrix()`
+      #Time to compute:     
+      #user   system  elapsed 
+      #935.729  136.999 7152.864 
+  b. Round the coverage matrix to integers
+7. Construct a DESeqDataSet, dds _ers, using the coverage matrix and phenotype data from rse_ER.
+  a. Pull out the phenotype data into `pheno`
+  b. Build a DESeqDataSet using covMat and design it using the four groups
+8. Exploratory Data Analysis
+  a.VSD & PCA to remove outliers 
+    i. VST transformation
+    ii. Plot PCA to determine if there are outliers
+    iii. Remove outlier, sample SRS812966. 
+    iv. Repeat VST transformation
+    v. Repeat PCA plot to confirm absence of outlier
+  b. Plot the effect of VSD transformation on the variance
+  c. Heatmaps
+    i. Count Matrix Heatmap
+      1. select the top 20 counts from the DESeqDataSet object and use to create a dataframe with group and time info
+      2. Use vsd, select, and df to create heatmap using `pheatmap()`
+    ii. Sample Distance Heatmap 
+      1. Find the distances between samples
+      2. Create a matrix of distances between samples and change the rownames to samples
+      3. Plot heatmap of sample distances
+      4. Plot the dendrogram of the sample distance heatmap above
+9. DESeq Analysis
+  a. Create DESeq object using the wald test and dds_ers
+  b. Make sure the contrasts targeted are available 
+  c. Create a variable to store the results of the design
+  d. Create the total result report
+10. DESeq Results & Contrasts
+  a.Aim 1
+    i.Result object: pre-deployment case vs pre-deployment control
+  b.Aim 2
+    i.Plot result object: pre-deployment case vs post-deployment case
+    ii.Plot result object: pre-deployment control vs post-deployment control
+    iii.Plot result object: post-deployment case vs post-deployment control
+11. Plot Counts per group
+  a. Get the results of the number of counts from all four groups
+  b. Plot the counts of the four groups using `ggplot` to label
+12. MA Plot
+  a.Plot the differences between measures of expressed regions. 
+13. Contrasts
+  a. Contrast : Aim 1a
+  b. Contrast : Aim 2a
+  c. Contrast : Aim 2b
+  d. Contrast : Aim 2c
+
+
+Session Info:
+sessionInfo()
+
+R version 3.6.1 (2019-07-05)
+Platform: x86_64-apple-darwin15.6.0 (64-bit)
+Running under: macOS Mojave 10.14.6
+
+Matrix products: default
+BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib
+LAPACK: /Library/Frameworks/R.framework/Versions/3.6/Resources/lib/libRlapack.dylib
+
+Random number generation:
+ RNG:     Mersenne-Twister 
+ Normal:  Inversion 
+ Sample:  Rounding 
+ 
+locale:
+[1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+
+attached base packages:
+ [1] grid      parallel  stats4    stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] vsn_3.53.0                  ggplot2_3.2.1               DESeq2_1.26.0              
+ [4] regionReport_1.20.0         RColorBrewer_1.1-2          pheatmap_1.0.12            
+ [7] derfinder_1.20.0            Gviz_1.29.3                 recount_1.12.1             
+[10] SummarizedExperiment_1.15.9 DelayedArray_0.11.8         BiocParallel_1.19.3        
+[13] matrixStats_0.55.0          Biobase_2.45.1              GenomicRanges_1.38.0       
+[16] GenomeInfoDb_1.21.2         IRanges_2.19.17             S4Vectors_0.23.25          
+[19] BiocGenerics_0.31.6         edgeR_3.28.0                limma_3.42.0   
+
+loaded via a namespace (and not attached):
+  [1] tidyselect_0.2.5         RSQLite_2.1.2            AnnotationDbi_1.47.1     htmlwidgets_1.5.1       
+  [5] munsell_0.5.0            preprocessCore_1.47.1    codetools_0.2-16         rentrez_1.2.2           
+  [9] withr_2.1.2              colorspace_1.4-1         GOSemSim_2.11.0          OrganismDbi_1.28.0      
+ [13] knitr_1.25               rstudioapi_0.10          DOSE_3.11.2              urltools_1.7.3          
+ [17] GenomeInfoDbData_1.2.1   polyclip_1.10-0          bit64_0.9-7              farver_1.1.0            
+ [21] downloader_0.4           vctrs_0.2.0              xfun_0.10                biovizBase_1.33.1       
+ [25] BiocFileCache_1.9.1      markdown_1.1             R6_2.4.0                 graphlayouts_0.5.0      
+ [29] locfit_1.5-9.1           AnnotationFilter_1.9.0   bitops_1.0-6             reshape_0.8.8           
+ [33] fgsea_1.11.1             gridGraphics_0.4-1       assertthat_0.2.1         scales_1.0.0            
+ [37] ggraph_2.0.0             nnet_7.3-12              enrichplot_1.5.2         gtable_0.3.0            
+ [41] affy_1.63.1              ggbio_1.34.0             tidygraph_1.1.2          ensembldb_2.9.6         
+ [45] rlang_0.4.0              zeallot_0.1.0            genefilter_1.67.1        splines_3.6.1           
+ [49] rtracklayer_1.46.0       lazyeval_0.2.2           acepack_1.4.1            GEOquery_2.54.1         
+ [53] dichromat_2.0-0          europepmc_0.3            checkmate_1.9.4          yaml_2.2.0              
+ [57] BiocManager_1.30.10      reshape2_1.4.3           GenomicFeatures_1.38.0   backports_1.1.5         
+ [61] qvalue_2.17.0            Hmisc_4.2-0              clusterProfiler_3.14.0   RBGL_1.62.1             
+ [65] tools_3.6.1              ggplotify_0.0.4          affyio_1.55.0            ggridges_0.5.1          
+ [69] Rcpp_1.0.2               plyr_1.8.4               base64enc_0.1-3          progress_1.2.2          
+ [73] zlibbioc_1.31.0          purrr_0.3.2              RCurl_1.95-4.12          prettyunits_1.0.2       
+ [77] rpart_4.1-15             openssl_1.4.1            viridis_0.5.1            cowplot_1.0.0           
+ [81] bumphunter_1.28.0        GenomicFiles_1.22.0      ggrepel_0.8.1            cluster_2.1.0           
+ [85] magrittr_1.5             data.table_1.12.2        DO.db_2.9                triebeard_0.3.0         
+ [89] ProtGenerics_1.17.4      evaluate_0.14            hms_0.5.1                xtable_1.8-4            
+ [93] XML_3.98-1.20            gridExtra_2.3            compiler_3.6.1           biomaRt_2.41.9          
+ [97] tibble_2.1.3             crayon_1.3.4             htmltools_0.4.0          Formula_1.2-3           
+[101] tidyr_1.0.0              geneplotter_1.63.0       lubridate_1.7.4          DBI_1.0.0               
+[105] tweenr_1.0.1             dbplyr_1.4.2             MASS_7.3-51.4            rappdirs_0.3.1          
+[109] BiocStyle_2.13.2         Matrix_1.2-17            readr_1.3.1              derfinderHelper_1.20.0  
+[113] igraph_1.2.4.1           pkgconfig_2.0.3          rvcheck_0.1.5            GenomicAlignments_1.21.7
+[117] registry_0.5-1           RefManageR_1.2.12        foreign_0.8-72           xml2_1.2.2              
+[121] foreach_1.4.7            annotate_1.63.0          DEFormats_1.14.0         rngtools_1.4            
+[125] pkgmaker_0.27            XVector_0.25.0           bibtex_0.4.2             knitcitations_1.0.10    
+[129] doRNG_1.7.1              stringr_1.4.0            VariantAnnotation_1.31.6 digest_0.6.21           
+[133] graph_1.63.0             Biostrings_2.53.2        rmarkdown_1.16           fastmatch_1.1-0         
+[137] htmlTable_1.13.2         curl_4.2                 Rsamtools_2.1.7          knitrBootstrap_1.0.2    
+[141] lifecycle_0.1.0          jsonlite_1.6             viridisLite_0.3.0        askpass_1.1             
+[145] BSgenome_1.53.2          pillar_1.4.2             lattice_0.20-38          GGally_1.4.0            
+[149] httr_1.4.1               survival_2.44-1.1        GO.db_3.8.2              glue_1.3.1              
+[153] iterators_1.0.12         bit_1.1-14               ggforce_0.3.1            stringi_1.4.3           
+[157] blob_1.2.0               latticeExtra_0.6-28      memoise_1.1.0            dplyr_0.8.3   
+
+References: 
+http://www.bioconductor.org/packages/release/bioc/vignettes/recount/inst/doc/recount-quickstart.html#43_predicted_phenotype_information

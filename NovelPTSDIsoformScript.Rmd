@@ -1,0 +1,528 @@
+---
+title: "CapstoneProjectDraft1"
+author: "EmilyScott"
+date: "2/17/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+1. Load packages using library()
+```{r, warning=FALSE}
+getwd()
+suppressMessages(library('recount'))
+suppressMessages(library('Gviz'))
+suppressMessages(library('derfinder'))
+suppressMessages(library('GenomicRanges'))
+suppressMessages(library(pheatmap))
+suppressMessages(library(RColorBrewer))
+suppressMessages(library(regionReport))
+suppressMessages(library('DESeq2'))
+suppressMessages(library('ggplot2'))
+suppressMessages(library('vsn'))
+```
+
+## Import the "Gene Networks Specific for Innate Immunity Define Post-traumatic Stress Disorder [RNA-Seq]" dataset from recount2 using 'recount'
+ Illumina HiSeq 2500, which is normally used for short reads, was used on this dataset before being uploaded onto the publically available recount database. 
+
+2. Import bigwig files and rse_gene.Rdata data.
+```{r}
+#2a. 
+#Download bigwig files by samples
+## Find the PTSD project of interest
+project_info <- abstract_search("PTSD")
+## Download the gene-level RangedSummarizedExperiment data
+download_study(project_info$project, type = 'samples')
+## Load the data
+load(file.path(project_info$project, type = "samples"))
+file.exists(file.path("SRP051848", "bw"))
+
+#2b.
+ ## Download the rse data
+if(!file.exists(file.path("SRP051848", "rse_gene.Rdata"))) {
+    download_study("SRP051848", type = "rse-gene")
+ }
+ ## Check that the file was downloaded
+ file.exists(file.path("SRP051848", "rse_gene.Rdata"))
+ ## Load the file path
+ load(file.path("SRP051848", "rse_gene.Rdata"))
+ # rename the rse_gene object to be named specifically for the study
+ rse_gene_SRP051848 <- rse_gene
+```
+
+3. Finding Phenotype Information
+```{r}
+#a.
+ #Look at recount data information using the following lines of code
+ #Find the dimensions
+ dim(colData(rse_gene_SRP051848))
+ #GEO info 
+ head(colData(rse_gene_SRP051848)$geo_accession)
+ #Look at feature info using this
+ head(rowRanges(rse_gene_SRP051848))
+ #look at counts using this
+ head(assays(rse_gene_SRP051848)$counts)
+ #look at sample metadata using this
+ head(colData(rse_gene_SRP051848))
+ ### AUC information used by scale_counts() by default
+ head(colData(rse_gene_SRP051848)$auc)
+#extract sample characteristics
+geochar <- lapply(split(colData(rse_gene_SRP051848), seq_len(nrow(colData(rse_gene_SRP051848)))), geo_characteristics)
+
+#b.
+#sample info split into 4 groups by 'group' AND 'time'
+sample_info <- data.frame(
+    run = colData(rse_gene_SRP051848)$run,
+    group = ifelse(grepl('Control', colData(rse_gene_SRP051848)$title), 'Control', 'Case'),
+    time = ifelse(grepl('Post', colData(rse_gene_SRP051848)$title), 'Post', 'Pre')
+      )
+#c.
+#Split sample_info into four groups for use in data Track function below
+#casePre
+sample_info_casePre <- sample_info[(sample_info$time=='Pre'),]
+sample_info_casePre <- sample_info_casePre[(sample_info_casePre$group=='Case'),]
+#casePost
+sample_info_casePost <- sample_info[(sample_info$time=='Post'),]
+sample_info_casePost <- sample_info_casePost[(sample_info_casePost$group=='Case'),]
+#controlPre
+sample_info_controlPre <- sample_info[(sample_info$time=='Pre'),]
+sample_info_controlPre <- sample_info_controlPre[(sample_info_controlPre$group=='Control'),]
+#controlPost
+sample_info_controlPost <- sample_info[(sample_info$time=='Post'),]
+sample_info_controlPost <- sample_info_controlPost[(sample_info_controlPost$group=='Control'),]
+```
+
+## Set a Coverage Track
+4. Create a data track object of coverage by group to compare expression levels in visualization section below.
+```{r}
+#a.
+#Separate bw files by group
+#Get the names of the files in the group using sample_info
+run_casePre <- paste0("SRP051848/bw/", sample_info_casePre$run, ".bw")
+run_casePost <- paste0("SRP051848/bw/", sample_info_casePost$run, ".bw")
+run_controlPre <- paste0("SRP051848/bw/", sample_info_controlPre$run, ".bw")
+run_controlPost <- paste0("SRP051848/bw/", sample_info_controlPost$run, ".bw")
+#b.
+#Set the file path for these bw's: Taking a look at one of the samples
+bwFile_casePre <- file.path(run_casePre[2]) 
+bwFile_casePost <- file.path(run_casePost[1])
+bwFile_controlPre <- file.path(run_controlPre[1])
+bwFile_controlPost <- file.path(run_controlPost[1])
+#c.
+#Take a look at chromosome 11
+ideogram <- IdeogramTrack(chromosome = "chr11",genome="hg19")
+axis <- GenomeAxisTrack()
+#d.
+#Take a look at the 4 different groups data track plots
+dTrack_casePre <- DataTrack( range= bwFile_casePre, genome = "hg19", type = "l", name = "Coverage", window = -1, chromosome = "chr11")
+dTrack_casePost <- DataTrack( range= bwFile_casePost, genome = "hg19", type = "l", name = "Coverage", window = -1, chromosome = "chr11")
+dTrack_controlPre <- DataTrack( range= bwFile_controlPre, genome = "hg19", type = "l", name = "Coverage", window = -1, chromosome = "chr11")
+dTrack_controlPost <- DataTrack( range= bwFile_controlPost, genome = "hg19", type = "l", name = "Coverage", window = -1, chromosome = "chr11")
+#e.
+#identify track names
+names(dTrack_casePre) <- 'CasePre Coverage'
+names(dTrack_casePost) <- 'CasePost Coverage'
+names(dTrack_controlPre) <- 'ControlPre Coverage'
+names(dTrack_controlPost) <- 'ControlPost Coverage'
+#f. 
+#Plot tracks by group
+trackPlot <- list(casePre=dTrack_casePre, casePost=dTrack_casePost, controlPre=dTrack_controlPre, controlPost=dTrack_controlPost, ideogram, axis)
+trackTitle<-c('casePre', 'casePost')
+#plotTracks(trackPlot, from = 72230796, to = 072230899, main = 'DataTrackPlot', xlab=trackTitle, track.plot.color="yellow")
+
+```
+
+
+
+### Use DERFinder 
+5. Define which regions are expressed in chr11 using `expressed_regions()` from `DERFinder` package.
+
+All samples were normalized to libraries of 40 million reads (`maxClusterGap`), each a 100 base-pairs long. This type of analysis is annotation-agnostic which can be advantageous when looking for novel isoforms.
+```{r}
+#http://www.bioconductor.org/packages/release/bioc/vignettes/recount/inst/doc/recount-quickstart.html
+
+## Define expressed regions 
+regions <- expressed_regions('SRP051848', 'chr11', cutoff = 30, 
+    maxClusterGap = 4000L)
+
+```
+### Compute Coverage Matrix using Regions
+6. Compute a RangedSummarizedExperiment object for chromosome 11 using the regions defined above.
+```{r}
+#a.
+## Compute coverage matrix for SRP051848 on chr11
+system.time(rse_ER <- coverage_matrix('SRP051848', 'chr11', regions))
+#Find the dimensions of the RSE
+dim(rse_ER)
+
+#b.
+#Round the coverage  matrix to integers
+covMat <- round(assays(rse_ER)$counts, 0)
+```
+The count matrix, rse_ER, has samples as the columns and regions as the rows. The counts represent the number of reads overlapping the region of that particular row. They are automatically scaled to a library size of 40 million reads, each with 100 base pairs. The coverage matrix was then rounded to integers, covMat. 
+
+## DESeq2 Analysis
+
+7. Construct a DESeqDataSet, dds _ers, using the coverage matrix and phenotype data from rse_ER.
+```{r}
+#a.
+#Pull out the phenotype data 
+pheno <- colData(rse_ER)
+#Complete the phenotype table with data from sample_info
+ m <- match(pheno$run, sample_info$run)
+ pheno <- cbind(pheno, sample_info[m, 2:3])
+ #sample_info <- factor(paste0(pheno$group, pheno$time))
+ pheno$timeGroup <-factor(paste0(pheno$group,pheno$time))
+
+#b.
+#Build a DESeqDataSet using covMat and designed with timeGroup
+#Use a design to investigate the relationship within the PTSD/Control and  the Pre/Post-Deployment variables
+dds_ers <- DESeqDataSetFromMatrix(countData = covMat, colData = pheno, design = ~ timeGroup)
+#group:time 
+
+```
+
+## Exploratory analysis
+VST transformation to do exploratory analysis and PCA to remove outliers.
+
+VST was chosen because :" if you have many samples (e.g. 100s), the rlog function might take too long, and so the vst function will be a faster choice. Above, we used a parametric fit for the dispersion. In this case, the closed-form expression for the variance stabilizing transformation is used by the vst function. If a local fit is used (option fitType="locfit" to estimateDispersions) a numerical integration is used instead. The transformed data should be approximated variance stabilized and also includes correction for size factors or normalization factors. The transformed data is on the log2 scale for large counts."
+
+The PCA plot showed an outlier sample. The sample (SRS812966) has been removed from the study and the new PCA plot shows the lack of outliers.
+Plot heatmap of vst transformed data.
+
+For the heatmap labels we diddd...
+
+For the sd plot, the vertical axis is the square root of variance over all samples: FROM DESEQ TEXT:'The figure below plots the standard deviation of the transformed data, across samples, against the mean, using the shifted logarithm transformation, the regularized log transformation and the variance stabilizing transformation. The shifted logarithm has elevated standard deviation in the lower count range, and the regularized log to a lesser extent, while for the variance stabilized data the standard deviation is roughly constant along the whole dynamic range.Note that the vertical axis in such plots is the square root of the variance over all samples, so including the variance due to the experimental conditions. While a flat curve of the square root of variance over the mean may seem like the goal of such transformations, this may be unreasonable in the case of datasets with many true differences due to the experimental conditions.'
+
+8. Exploratory Data Analysis
+```{r}
+#a.VSD & PCA to remove outliers 
+#ai.
+#vst transformation
+vsd<-vst(dds_ers, blind = FALSE)
+head(assay(vsd), 6)
+head(colData(vsd)$sample)
+#aii.
+#Plot PCA to determine if there are outliers
+pca_vsd<-(DESeq2::plotPCA(vsd, intgroup= "characteristics", returnData=FALSE))
+#show outlier sample number
+pca_vsd + geom_label(aes(label = colData(vsd)$sample))
+#aiii.
+#There is one outlier in group row SRR1747386, sample SRS812966. It is removed from dds and vst and pca is run again.
+dds_ers<-dds_ers[,-173]
+#aiv.
+#vst transformation
+vsd<-vst(dds_ers, blind = FALSE)
+#head(assay(vsd), 6)
+#head(colData(vsd)$sample)
+#av.
+#PCA 
+pca_vsd<-DESeq2::plotPCA(vsd, intgroup="characteristics", returnData=FALSE)
+pca_vsd
+
+#b. SD Plot 
+#Plot the effect of VSD transformation on the variance
+meanSdPlot(assay(vsd))
+```
+
+```{r}
+#c. Heatmaps
+
+#ci.
+#Heatmap of the count matrix
+#ci1.
+#select the top 20 counts
+select <- order(rowMeans(counts(dds_ers)), decreasing=TRUE)[1:20]
+#Combine grouping data with dds object to create the dataframe for heatmap
+df <- as.data.frame(colData(dds_ers)[,c("group","time")])
+#ci2.
+#use vsd, select, and df to create heatmap using `pheatmap()`
+pheatmap(assay(vsd)[select,], 
+         cluster_rows=TRUE, 
+         show_rownames=TRUE,
+         cluster_cols=TRUE, 
+         annotation_col=df,
+         main = "Heatmap of Count Matrix")
+
+#cii.
+#Heatmap of the sample distances
+#cii1.
+#find the distances between samples
+sampleDist <- dist(t(assay(vsd)))
+#cii2. 
+#create a matrix of distances between samples and change the rownames to samples
+sampleDistMat <- as.matrix(sampleDist)
+rownames(sampleDistMat) <- paste0(vsd$sample)
+colnames(sampleDistMat) <- paste0(vsd$sample)
+#cii3.
+#plot heatmap of sample distances
+sdh<- pheatmap(sampleDistMat,
+         clustering_distance_rows = sampleDist,
+         clustering_distance_cols = sampleDist,
+         main = "Heatmap of Count Matrix",
+         xlabel = "First Sample",
+         ylabel = "Second Sample")
+#cii4.
+#Plot the dendrogram of the sample distance heatmap above
+abline(plot(sdh$tree_row), h=55, col="red", lty=2, lwd=2)
+```
+
+DESeq2 Analysis
+Using the DESeqDataSet object created above, the DESeq() function was conducted to obtain the differential expression between groups.
+
+USE WALD instead
+The Wald test was used because there are three factors with multiple levels; time, group, and timeGroup. The LRT is useful for testing multiple terms at once, for testing four levels of a factor at once, not all interactions between two variables.
+
+
+
+Aim : Determine whether developing PTSD changes your genome by looking at all four groups.
+9. 
+```{r}
+#a.
+#Create DESeq object using the wald test and dds_ers
+dds_ers_wald <- estimateSizeFactors(dds_ers)
+dds_ers_wald <- estimateDispersions(dds_ers_wald)
+dds_ers_wald <- nbinomWaldTest(dds_ers_wald)
+#b.
+#Make sure the contrasts targeted are available
+resultsNames(dds_ers_wald)
+summary(results(dds_ers_wald))
+#c.
+#Create a variable to store the results of the design 
+res_ers<- results(dds_ers_wald, alpha = 0.05)
+table(res_ers$padj <0.05)
+
+#d. 
+#Create the total result report
+report<-regionReport::DESeq2Report(dds_ers_wald, res = res,
+    project = 'SRP051848 (PreDeployment-Group-level, chr11)',
+    intgroup = c('timeGroup'), outdir = '.',
+    output = 'SRP051848-results-Time-Group-level-chr11')
+```
+
+10. DESeq Results & Contrasts
+```{r}
+#a
+#Aim 1
+#ai. CasePre v ControlPre
+#Result object: pre-deployment case vs pre-deployment control
+res_ers_wald_1a <- results(dds_ers_wald, contrast = c('timeGroup', 'CasePre', 'ControlPre'), alpha = 0.05 )
+sum(res_ers_wald_1a$padj<0.05, na.rm=TRUE)
+summary(res_ers_wald_1a)
+# out of 17226 with nonzero total read count
+# adjusted p-value < 0.05
+# LFC > 0 (up)       : 20, 0.12%
+# LFC < 0 (down)     : 0, 0%
+# outliers [1]       : 12, 0.07%
+# low counts [2]     : 0, 0%
+# (mean count < 0)
+# [1] see 'cooksCutoff' argument of ?results
+# [2] see 'independentFiltering' argument of ?results
+report_1a<-regionReport::DESeq2Report(dds_ers_wald, 
+    res = res_ers_wald_1a,
+    project = 'SRP051848 (PreDeployment-Group-level, chr11)',
+    intgroup = c('timeGroup'), outdir = '.',
+    output = 'SRP051848-results-PreDeployment-Group-level-chr11')
+#b.
+#Aim 2
+# bi. CasePre v CasePost
+#Plot result object: pre-deployment case vs post-deployment case
+res_ers_wald_2a <- results(dds_ers_wald, contrast = c('timeGroup', 'CasePre', 'CasePost'), alpha = 0.05 )
+sum(res_ers_wald_2a$padj<0.05, na.rm=TRUE)
+summary(res_ers_wald_2a)
+# out of 17223 with nonzero total read count
+# adjusted p-value < 0.05
+# LFC > 0 (up)       : 496, 2.9%
+# LFC < 0 (down)     : 643, 3.7%
+# outliers [1]       : 12, 0.07%
+# low counts [2]     : 7572, 44%
+# (mean count < 3)
+# [1] see 'cooksCutoff' argument of ?results
+# [2] see 'independentFiltering' argument of ?results
+report_2a<-regionReport::DESeq2Report(dds_ers_wald, res = res_ers_wald_2a,
+    project = 'SRP051848 (PTSD-Time-level, chr11)',
+    intgroup = c('timeGroup'), outdir = '.',
+    output = 'SRP051848-results-PTSD-time-level-chr11')
+
+#bii.
+#Plot result object: pre-deployment control vs post-deployment control
+res_ers_wald_2b <- results(dds_ers_wald, contrast = c('timeGroup', 'ControlPre', 'ControlPost'), alpha = 0.05 )
+sum(res_ers_wald_2b$padj<0.05, na.rm=TRUE)
+summary(res_ers_wald_2b)
+# out of 17223 with nonzero total read count
+# adjusted p-value < 0.05
+# LFC > 0 (up)       : 275, 1.6%
+# LFC < 0 (down)     : 253, 1.5%
+# outliers [1]       : 12, 0.07%
+# low counts [2]     : 9218, 54%
+# (mean count < 6)
+# [1] see 'cooksCutoff' argument of ?results
+# [2] see 'independentFiltering' argument of ?results
+report_2b<-regionReport::DESeq2Report(dds_ers_wald, res = res_ers_wald_2b,
+    project = 'SRP051848 (Control-Time-level, chr11)',
+    intgroup = c('timeGroup'), outdir = '.',
+    output = 'SRP051848-results-Control-time-level-chr11')
+
+#biii.
+#Plot result object: post-deployment case vs post-deployment control
+res_ers_wald_2c <- results(dds_ers_wald, contrast = c('timeGroup', 'CasePost', 'ControlPost'), alpha = 0.05 )
+sum(res_ers_wald_2c$padj<0.05, na.rm=TRUE)
+summary(res_ers_wald_2c)
+
+report_2c<-regionReport::DESeq2Report(dds_ers_wald, res = res_ers_wald_2c,
+    project = 'SRP051848 (Post-Group-level, chr11)',
+    intgroup = c('timeGroup'), outdir = '.',
+    output = 'SRP051848-results-Post-Group-level-chr11')
+```
+
+## Visualization
+
+11. Plot Counts per group
+While the control group looks similar in counts from pre to post, the PTSD case group has a much lower count number in the post-deployment group. The control and PTSD case pre-deployment groups look somewhat similar, showing that pre-deployment, the subjects counts did not differ too much overall.
+```{r}
+#a.
+#Get the results of the number of counts from all four groups
+CPlot_tG <- plotCounts(dds_ers, gene=which.min(res$padj), intgroup="timeGroup", 
+                returnData=TRUE)
+
+#b.
+#Plot the counts of the four groups using `ggplot` to label
+ggplot(CPlot_tG, aes(x=timeGroup, y=count)) + 
+  geom_point(position=position_jitter(w=0.1,h=0)) + 
+  scale_y_log10(breaks=c(25,100,400)) +
+  ggtitle("Plot of Counts per Group")
+
+```
+
+12. MA Plot
+Visualize the differences between measures of expressed regions after log ratio transformation. There is an even dispersion above and below the center line, indicating equally different expressed regions in each group. The plot also indicates that expressed regions are only detected around and above a normalized count of 1e+00.
+
+We chose the MA plot over a dispersion plot to include log fold changes which makes it easier to interpret. 
+```{r}
+#a.
+#Plot the differences between measures of expressed regions. 
+MA_res_ers <- plotMA(res_ers, main="DESeq2 results for SRP051848 (Group&Time-level, chr11)")
+```
+
+## Pull Out Regions of Interest
+13. Contrasts
+Based on the contrasts above, pull out the top featured regions start and end and create datatracks to visualize the contrants.
+
+Aim 1a
+Investigate the genome of people at high risk for developing PTSD by looking at the two pre-deployment groups
+We don't see very much change between pre-deployment groups, just a minimal amount around 5.7, 5.702, and 5.706. 
+```{r}
+#a. 
+#Contrast : Aim 1a
+Aim1a_1s<-regions["1895"]$indexStart
+Aim1a_1e<-regions["1895"]$indexEnd
+Aim1a_2s<-regions["1861"]$indexStart
+Aim1a_2e<-regions["1861"]$indexEnd
+Aim1a_3s<-regions["1942"]$indexStart
+Aim1a_3e<-regions["1942"]$indexEnd
+#Regions of interest
+Aim1a_start<-min(Aim1a_1s, Aim1a_2s, Aim1a_3s)
+Aim1a_end<-max(Aim1a_1e, Aim1a_2e, Aim1a_3e)
+
+#Plot tracks by group
+gen <- "hg19"
+chr <- "Chr11"
+start <- Aim1a_start
+end <- Aim1a_end
+ideogram <- IdeogramTrack(chromosome=chr ,genome=gen)
+axis <- GenomeAxisTrack()
+htrack <- HighlightTrack(trackList = list(ideogram, axis), start = start, end = end, chromosome = chr)
+
+trackPlot <- list(htrack, casePre=dTrack_casePre, controlPre=dTrack_controlPre)
+trackTitle<-c('casePre', 'controlPre')
+plotTracks(trackPlot, from = start, to = end, main = 'CasePre v ContorlPre DataTrackPlot', xlab=trackTitle, track.plot.color="yellow")
+```
+
+Aim 2: Determine whether developing PTSD changes your genome by looking at all four groups.
+```{r}
+#b. 
+#Contrast : Aim 2a
+Aim2a_1s<-regions["13513"]$indexStart
+Aim2a_1e<-regions["13513"]$indexEnd
+Aim2a_2s<-regions["13511"]$indexStart
+Aim2a_2e<-regions["13511"]$indexEnd
+Aim2a_3s<-regions["13512"]$indexStart
+Aim2a_3e<-regions["13512"]$indexEnd
+Aim2a_4s<-regions["13509"]$indexStart
+Aim2a_4e<-regions["13509"]$indexEnd
+#Regions of interest
+Aim2a_start<-min(Aim2a_1s, Aim2a_2s, Aim2a_3s, Aim2a_4s)
+Aim2a_end<-max(Aim2a_1e, Aim2a_2e, Aim2a_3e, Aim2a_4e)
+
+#Plot tracks by group
+gen <- "hg19"
+chr <- "Chr11"
+start <- Aim2a_start
+end <- Aim2a_end
+ideogram <- IdeogramTrack(chromosome=chr ,genome=gen)
+axis <- GenomeAxisTrack()
+htrack <- HighlightTrack(trackList = list(ideogram, axis), start = start, end = end, chromosome = chr)
+
+trackPlot <- list(htrack, casePre=dTrack_casePre, casePost=dTrack_casePost)
+trackTitle<-c('casePre', 'casePost')
+plotTracks(trackPlot, from = start, to = end, main = 'CasePre v CasePost DataTrackPlot', xlab=trackTitle, track.plot.color="yellow")
+```
+```{r}
+#c. 
+#Contrast : Aim 2b
+Aim2b_1s<-regions["13513"]$indexStart
+Aim2b_1e<-regions["13513"]$indexEnd
+Aim2b_2s<-regions["15164"]$indexStart
+Aim2b_2e<-regions["15164"]$indexEnd
+#Regions of interest
+Aim2b_start<-min(Aim2b_1s, Aim2b_2s)
+Aim2b_end<-max(Aim2b_1e, Aim2b_2e)
+
+#Plot tracks by group
+gen <- "hg19"
+chr <- "Chr11"
+start <- Aim2b_start
+end <- Aim2b_end
+ideogram <- IdeogramTrack(chromosome=chr ,genome=gen)
+axis <- GenomeAxisTrack()
+htrack <- HighlightTrack(trackList = list(ideogram, axis), start = start, end = end, chromosome = chr)
+
+trackPlot <- list(htrack, controlPre=dTrack_controlPre, controlPost=dTrack_controlPost)
+trackTitle<-c('controlPre', 'controlPost')
+plotTracks(trackPlot, from = start, to = end, main = 'ControlPre v ControlPost DataTrackPlot', xlab=trackTitle, track.plot.color="yellow")
+```
+```{r}
+#d. 
+#Contrast : Aim 2c
+Aim2c_1s<-regions["1"]$indexStart
+Aim2c_1e<-regions["1"]$indexEnd
+Aim2c_2s<-regions["1000"]$indexStart
+Aim2c_2e<-regions["1000"]$indexEnd
+#Regions of interest
+Aim2c_start<-min(Aim2c_1s, Aim2c_2s)
+Aim2c_end<-max(Aim2c_1e, Aim2c_2e)
+
+#Plot tracks by group
+gen <- "hg19"
+chr <- "Chr11"
+start <- Aim2c_start
+end <- Aim2c_end
+ideogram <- IdeogramTrack(chromosome=chr ,genome=gen)
+axis <- GenomeAxisTrack()
+htrack <- HighlightTrack(trackList = list(ideogram, axis), start = start, end = end, chromosome = chr)
+
+trackPlot <- list(htrack, casePost=dTrack_casePost, controlPost=dTrack_controlPost)
+trackTitle<-c('casePost', 'controlPost')
+plotTracks(trackPlot, from = start, to = end, main = 'CasePost v ControlPost DataTrackPlot', xlab=trackTitle, track.plot.color="yellow")
+```
+
+
+# Save R Session info for reproducibility
+
+```{r}
+sessionInfo()
+```
+
